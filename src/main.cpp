@@ -1,6 +1,6 @@
 #define DEBUG_HARDWARE_SERIAL
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.3
+#define CODE_VERSION 1.4
 #define HOSTNAME "costume01"
 
 #include <Arduino.h>
@@ -9,13 +9,20 @@
 /* credentials.h example:
 const char* ssid = "network_name";
 const char* password = "password";
-const IPAddress ip(10,10,10,101);                                               //ip address of the unit
+IPAddress gateway(10,0,100,1);
  */
 
  #include <ArduinoOTA.h>
 //   |--------------|-------|---------------|--|--|--|--|--|
 //   ^              ^       ^               ^     ^
 //   Sketch    OTA update   File system   EEPROM  WiFi config (SDK)
+
+extern "C"{
+ #include "user_interface.h"    //NOTE needed for esp_system_info Since the include file from SDK is a plain C not a C++
+}
+#include "devices.h"
+IPAddress deviceip;
+int unit_ID;
 
 void setup() {
   #ifdef DEBUG_HARDWARE_SERIAL
@@ -41,8 +48,31 @@ void setup() {
     Serial.println("Starting Setup");
   #endif
 
+//---------------------------- WiFi --------------------------------------------
+// determine IP address based on devices.h definitions
+  int chip_id = ESP.getChipId();
+  const device_details *device = devices;
+  for (; device->esp_chip_id != 0; device++) {
+    //Serial.printf("chip_id %X = %X?\n", chip_id, device->esp_chip_id);
+    if (device->esp_chip_id == chip_id)
+      break;
+  }
+  if (device->esp_chip_id == 0) {
+    while(1) {
+      #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.println("Could not obtain a chipId we know. Means we dont know what id/IP address to asign. Fail");
+      Serial.printf("This ESP8266 Chip id = 0x%08X\n", chip_id);
+      #endif
+    }
+  }
+  deviceip = IPAddress(gateway);
+  deviceip[3] = device->id;
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.print("found in devices list ID: "); Serial.println(deviceip[3]);
+  #endif
+
   WiFi.mode(WIFI_STA);
-  WiFi.config(ip, gateway, subnet);
+  WiFi.config(deviceip, gateway, subnet);
   WiFi.begin(ssid, password);
 
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
