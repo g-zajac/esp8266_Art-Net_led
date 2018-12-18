@@ -1,6 +1,7 @@
 #define DEBUG_HARDWARE_SERIAL
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.2
+#define CODE_VERSION 1.3
+#define HOSTNAME "costume01"
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
@@ -10,6 +11,11 @@ const char* ssid = "network_name";
 const char* password = "password";
 const IPAddress ip(10,10,10,101);                                               //ip address of the unit
  */
+
+ #include <ArduinoOTA.h>
+//   |--------------|-------|---------------|--|--|--|--|--|
+//   ^              ^       ^               ^     ^
+//   Sketch    OTA update   File system   EEPROM  WiFi config (SDK)
 
 void setup() {
   #ifdef DEBUG_HARDWARE_SERIAL
@@ -51,8 +57,41 @@ void setup() {
     Serial.print("unit MAC address: "); Serial.println(WiFi.macAddress());
     Serial.print("assigned IP address: "); Serial.println(WiFi.localIP());
   #endif
+
+// --------------------------- OTA ---------------------------------------------
+  ArduinoOTA.setHostname(HOSTNAME);
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.print("Hostname: "); Serial.println(HOSTNAME);
+  #endif
+
+  ArduinoOTA.onStart([]() {
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.println("Uploading...");
+  #endif
+  });
+  ArduinoOTA.onEnd([]() {
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.println("\nEnd");
+    #endif
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    #endif
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    #endif
+  });
+  ArduinoOTA.begin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  ArduinoOTA.handle();
 }
