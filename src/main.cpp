@@ -1,9 +1,15 @@
 #define DEBUG_HARDWARE_SERIAL
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.1
+#define CODE_VERSION 1.2
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include "credentials.h"                                                        //ignored by git to keep the network details private
+/* credentials.h example:
+const char* ssid = "network_name";
+const char* password = "password";
+const IPAddress ip(10,10,10,101);                                               //ip address of the unit
+ */
 
 void setup() {
   #ifdef DEBUG_HARDWARE_SERIAL
@@ -27,6 +33,23 @@ void setup() {
     Serial.print( F("Vcc: ") ); Serial.println(ESP.getVcc());
     Serial.println(" ");
     Serial.println("Starting Setup");
+  #endif
+
+  WiFi.mode(WIFI_STA);
+  WiFi.config(ip, gateway, subnet);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.println("Connection Failed! Rebooting...");
+    #endif
+    delay(5000);
+    ESP.restart();
+  }
+
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.print("unit MAC address: "); Serial.println(WiFi.macAddress());
+    Serial.print("assigned IP address: "); Serial.println(WiFi.localIP());
   #endif
 }
 
