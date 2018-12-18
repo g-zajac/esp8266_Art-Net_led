@@ -1,6 +1,7 @@
 #define DEBUG_HARDWARE_SERIAL
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.2
+#define CODE_VERSION 1.3
+#define HOSTNAME "costume01"
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
@@ -58,6 +59,11 @@ void setup() {
   #endif
 
 // --------------------------- OTA ---------------------------------------------
+  ArduinoOTA.setHostname(HOSTNAME);
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.print("Hostname: "); Serial.println(HOSTNAME);
+  #endif
+
   ArduinoOTA.onStart([]() {
   #ifdef DEBUG_HARDWARE_SERIAL
     Serial.println("Uploading...");
