@@ -1,7 +1,9 @@
 #define DEBUG_HARDWARE_SERIAL
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.4
+#define CODE_VERSION 1.5
 #define HOSTNAME "costume01"
+
+#define LED_OUT    13
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
@@ -18,13 +20,32 @@ IPAddress gateway(10,0,100,1);
 //   Sketch    OTA update   File system   EEPROM  WiFi config (SDK)
 
 extern "C"{
- #include "user_interface.h"    //NOTE needed for esp_system_info Since the include file from SDK is a plain C not a C++
+ #include "user_interface.h"                                                    //NOTE needed for esp_system_info Since the include file from SDK is a plain C not a C++
 }
 #include "devices.h"
 IPAddress deviceip;
 int unit_ID;
 
+//------------------------ functions -------------------------------------------
+void blink(int tOn, int tOff){                                                  // for testing led
+static int timer=tOn;
+  static long previousMillis;
+  if ((millis() - previousMillis) >= timer) {
+    if (digitalRead(LED_OUT) == HIGH) {
+      timer = tOff;
+    } else {
+      timer = tOn;
+    }
+digitalWrite(LED_OUT, !digitalRead(LED_OUT));
+     previousMillis = millis();
+  }
+}
+//------------------------------------------------------------------------------
+
 void setup() {
+  pinMode(LED_OUT, OUTPUT);
+  analogWrite(LED_OUT, 0);
+
   #ifdef DEBUG_HARDWARE_SERIAL
     Serial.begin(SERIAL_SPEED);
     //Compilation info
@@ -124,4 +145,5 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+  blink(500,500);                                                               // for testing led
 }
