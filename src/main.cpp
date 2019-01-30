@@ -1,6 +1,6 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.83
+#define CODE_VERSION 1.84
 #define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
 #define LED_OUT  13
@@ -30,6 +30,8 @@ extern "C"{
 }
 #include "devices.h"                                                            //list of MAC addresses of devices for self assigning static IPs
 IPAddress deviceip;
+int unitID;
+char unitName[16];
 
 //----------------------------------------- ArtNet -----------------------------
 #include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
@@ -76,7 +78,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       Serial.println("");
     #endif
 
-    int value = data[deviceip[3]-1];                                            //artnet address = unit IP last octet, starting from 0 -> -1
+    int value = data[unitID-1];                                            //artnet address = unit IP last octet, starting from 0 -> -1
     if (value == 0) analogWrite(LED_OUT, value);
     if (value > 0 and value <=255) analogWrite(LED_OUT, value);
     if (value > 255){
@@ -86,28 +88,29 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     }
 }
 
-void sendReport(OSCMessage &msg){
-  #ifdef DEBUG_HARDWARE_SERIAL
-    Serial.println("Received Ping");
-  #endif
-    OSCMessage msgOUT("/Report");
-    IPAddress localAddr = WiFi.localIP();
-    msgOUT.add(localAddr[3]);
-    int32_t rssi = WiFi.RSSI();   //check if rssi is for current network
-    // add string match of ssid for current network
-    //int quality = 2* (rssi + 100);
-    msgOUT.add((int32_t)rssi);
-    runningTime = millis()/1000;
-    msgOUT.add(int(runningTime));
-    float v = analogRead(ADCINPUT) * 10.65; // ((30000 + 3000)/3000)calibration based on voltage divider 30k - 3k, calibrated on workbench
-    float voltage = v / 1024;
-    msgOUT.add(float(voltage));
-    msgOUT.add(float(CODE_VERSION));
-
-    Udp.beginPacket(remoteIP, destPort);
-    msgOUT.send(Udp); // send the bytes
-    Udp.endPacket(); // mark the end of the OSC Packet
+void sendOSCmessage(char* name, int value){
+  char message_osc_header[20];
+  message_osc_header[0] = {0};
+  strcat(message_osc_header, unitName);
+  strcat(message_osc_header, name);
+  OSCMessage message(message_osc_header);
+  message.add(value);
+  Udp.beginPacket(remoteIP, destPort);
+  message.send(Udp);
+  Udp.endPacket();
+  message.empty();
 }
+
+void sendReport(){
+  //sendOSCmessage("/ver", CODE_VERSION);                                       //TODO add conversion
+  sendOSCmessage("/rssi", WiFi.RSSI());
+  sendOSCmessage("/channel", WiFi.channel());
+  sendOSCmessage("/time", (millis()/1000));               //running time in secs
+  float v = analogRead(ADCINPUT) * 10.65; // ((30000 + 3000)/3000)calibration based on voltage divider 30k - 3k, calibrated on workbench
+  // float voltage = v / 1024;
+  sendOSCmessage("/voltage", v);                                                 //TODO fix float/integer
+}
+
 //------------------------------------------------------------------------------
 
 void setup() {
@@ -156,10 +159,12 @@ void setup() {
     }
   }
   deviceip = IPAddress(gateway);
-  deviceip[3] = device->id;
+  unitID = device->id;
   #ifdef DEBUG_HARDWARE_SERIAL
-    Serial.print("found in devices list ID: "); Serial.println(deviceip[3]);
+    Serial.print("found in devices list ID: "); Serial.println(unitID);
   #endif
+
+  deviceip[3] = unitID;
 
   WiFi.mode(WIFI_STA);
   WiFi.config(deviceip, gateway, subnet);
@@ -178,12 +183,14 @@ void setup() {
     Serial.print("assigned IP address: "); Serial.println(WiFi.localIP());
   #endif
 
+  // build unit name
+  unitName[0] = {0};
+  snprintf(unitName, 30, "%s%i", HOSTNAME, unitID);
+
 // --------------------------- OTA ---------------------------------------------
-  char buf[30]; buf[0] = {0};
-  snprintf(buf, 30, "%s%i", HOSTNAME, deviceip[3]);
-  ArduinoOTA.setHostname(buf);
+  ArduinoOTA.setHostname(unitName);
   #ifdef DEBUG_HARDWARE_SERIAL
-    Serial.print("Hostname: "); Serial.println(buf);
+    Serial.print("Hostname: "); Serial.println(unitName);
   #endif
 
   ArduinoOTA.setHostname(HOSTNAME);
@@ -236,11 +243,11 @@ void loop() {
 
   //send OSC report
   if (millis() - previousMillisGlobal >= reportInterval){
-    sendReport;
-    previousMillisGlobal = millis();
     #ifdef DEBUG_HARDWARE_SERIAL
-      Serial.println("OSC report sent");
+      Serial.println("sending OSC report");
     #endif
+    sendReport();
+    previousMillisGlobal = millis();
   }
 
 }
