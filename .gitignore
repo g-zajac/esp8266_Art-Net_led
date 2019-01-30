@@ -5,3 +5,4 @@
 .gcc-flags.json
 src/credentials.h
 .DS_Store
+/lib
