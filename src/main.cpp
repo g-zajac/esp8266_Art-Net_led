@@ -1,13 +1,13 @@
-#define DEBUG_HARDWARE_SERIAL
+#define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
 #define CODE_VERSION 1.5
-#define HOSTNAME "costume01"
+#define HOSTNAME "costume"                                                      //TODO change to assign dynamicly based on ip
 
 #define LED_OUT    13
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include "credentials.h"                                                        //ignored by git to keep the network details private
+#include "credentials.h"                                                        //ignored by git to keep the network details in separate file private
 /* credentials.h example:
 const char* ssid = "network_name";
 const char* password = "password";
@@ -22,7 +22,7 @@ IPAddress gateway(10,0,100,1);
 extern "C"{
  #include "user_interface.h"                                                    //NOTE needed for esp_system_info Since the include file from SDK is a plain C not a C++
 }
-#include "devices.h"
+#include "devices.h"                                                            //list of MAC addresses of devices for self assigning static IPs
 IPAddress deviceip;
 int unit_ID;
 
@@ -48,8 +48,7 @@ void setup() {
 
   #ifdef DEBUG_HARDWARE_SERIAL
     Serial.begin(SERIAL_SPEED);
-    //Compilation info
-    Serial.println(" ");  Serial.println(" ");  Serial.println(" ");
+    Serial.println(" ");  Serial.println(" ");  Serial.println(" ");            //Some compilation and other info 
     Serial.println("---------------------------------------");
     Serial.println("Compiled: " __DATE__ ", " __TIME__ ", " __VERSION__);
     Serial.print("Code version: "); Serial.println(CODE_VERSION);
@@ -70,19 +69,21 @@ void setup() {
   #endif
 
 //---------------------------- WiFi --------------------------------------------
-// determine IP address based on devices.h definitions
+// determine IP address based on devices.h definitions, each device has exactly the same code and address itself accordingly to mac table
   int chip_id = ESP.getChipId();
   const device_details *device = devices;
   for (; device->esp_chip_id != 0; device++) {
-    //Serial.printf("chip_id %X = %X?\n", chip_id, device->esp_chip_id);
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.printf("chip_id %X = %X?\n", chip_id, device->esp_chip_id);
+    #endif
     if (device->esp_chip_id == chip_id)
       break;
   }
   if (device->esp_chip_id == 0) {
     while(1) {
       #ifdef DEBUG_HARDWARE_SERIAL
-      Serial.println("Could not obtain a chipId we know. Means we dont know what id/IP address to asign. Fail");
-      Serial.printf("This ESP8266 Chip id = 0x%08X\n", chip_id);
+        Serial.println("Could not obtain a chipId we know. Means we dont know what id/IP address to asign. Fail");
+        Serial.printf("This ESP8266 Chip id = 0x%08X\n", chip_id);
       #endif
     }
   }
