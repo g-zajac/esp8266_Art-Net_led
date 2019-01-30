@@ -1,7 +1,7 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
 #define CODE_VERSION 1.73
-#define HOSTNAME "costume"
+#define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
 #define LED_OUT    13
 
@@ -12,6 +12,7 @@
 const char* ssid = "network_name";
 const char* password = "password";
 IPAddress gateway(10,0,100,1);
+IPAddress subnet(255,255,255,0);
  */
 
  #include <ArduinoOTA.h>
@@ -25,13 +26,12 @@ extern "C"{
 #include "devices.h"                                                            //list of MAC addresses of devices for self assigning static IPs
 IPAddress deviceip;
 
+//----------------------------------------- ArtNet -----------------------------
 #include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
 ArtnetWifi artnet;
-//------------------- ArtNet -----------------------------
-
 
 //------------------------ functions -------------------------------------------
-void blink(int tOn, int tOff){                                                  // for testing led
+void blink(int tOn, int tOff){                                                  // for LEDs testing
 static int timer=tOn;
   static long previousMillis;
   if ((millis() - previousMillis) >= timer) {
@@ -182,6 +182,8 @@ void setup() {
   });
   ArduinoOTA.begin();
 
+// -----------------------------------------------------------------------------
+
   //initialize artnet
   artnet.begin();
 
@@ -191,6 +193,6 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
-  //blink(500,500);
-  artnet.read();                                                             // for testing led
+  //blink(500,500);                                                             // for LEDs testing
+  artnet.read();
 }
