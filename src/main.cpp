@@ -1,8 +1,8 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.72
+#define CODE_VERSION 1.73
 #define HOSTNAME "costume"
-#define UNIVERSE 0                                                              //Max MSP test patch 0, desk 1
+#define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
 #define LED_OUT    13
 
 #include <Arduino.h>
@@ -24,7 +24,6 @@ extern "C"{
 }
 #include "devices.h"                                                            //list of MAC addresses of devices for self assigning static IPs
 IPAddress deviceip;
-int unit_ID;
 
 #include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
 ArtnetWifi artnet;
@@ -57,10 +56,14 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       Serial.print(sequence, DEC);
       Serial.print(", Data (");
       Serial.print(length, DEC);
-      Serial.println("): ");
+      Serial.print("), Address: ");
+      Serial.print(deviceip[3]);
+      Serial.print(", Value: ");
+      Serial.print(data[deviceip[3]-1]);
+      Serial.println("");
     #endif
 
-    int value = data[deviceip[3]-1];                                            //artnet address = unit IP last octet
+    int value = data[deviceip[3]-1];                                            //artnet address = unit IP last octet, starting from 0 -> -1
     if (value == 0) analogWrite(LED_OUT, value);
     if (value > 0 and value <=255) analogWrite(LED_OUT, value);
     if (value > 255){
