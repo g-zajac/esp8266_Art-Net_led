@@ -1,9 +1,10 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.73
+#define CODE_VERSION 1.81
 #define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
-#define LED_OUT    13
+#define LED_OUT  13
+#define ADCINPUT A0
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
@@ -13,6 +14,10 @@ const char* ssid = "network_name";
 const char* password = "password";
 IPAddress gateway(10,0,100,1);
 IPAddress subnet(255,255,255,0);
+const IPAddress remoteIP(xxx,xxx,xxx,xxx);        // remote IP of your computer
+const unsigned int destPort = xxxx;          // remote port to receive OSC
+const unsigned int localPort = xxxx;        // local port to listen for OSC packets (actually not used for sending)
+
  */
 
  #include <ArduinoOTA.h>
@@ -29,6 +34,14 @@ IPAddress deviceip;
 //----------------------------------------- ArtNet -----------------------------
 #include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
 ArtnetWifi artnet;
+
+//----------------------------------------- OSC --------------------------------
+#include <OSCBundle.h>
+#include <OSCData.h>
+WiFiUDP Udp;
+OSCErrorCode error;
+unsigned long runningTime, previousMillisGlobal;
+int reportInterval = 3000;                                                      // send OSC report every 3 sec
 
 //------------------------ functions -------------------------------------------
 void blink(int tOn, int tOff){                                                  // for LEDs testing
@@ -73,6 +86,28 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     }
 }
 
+void sendReport(OSCMessage &msg){
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.println("Received Ping");
+  #endif
+    OSCMessage msgOUT("/Report");
+    IPAddress localAddr = WiFi.localIP();
+    msgOUT.add(localAddr[3]);
+    int32_t rssi = WiFi.RSSI();   //check if rssi is for current network
+    // add string match of ssid for current network
+    //int quality = 2* (rssi + 100);
+    msgOUT.add((int32_t)rssi);
+    runningTime = millis()/1000;
+    msgOUT.add(int(runningTime));
+    float v = analogRead(ADCINPUT) * 10.65; // ((30000 + 3000)/3000)calibration based on voltage divider 30k - 3k, calibrated on workbench
+    float voltage = v / 1024;
+    msgOUT.add(float(voltage));
+    msgOUT.add(float(CODE_VERSION));
+
+    Udp.beginPacket(remoteIP, destPort);
+    msgOUT.send(Udp); // send the bytes
+    Udp.endPacket(); // mark the end of the OSC Packet
+}
 //------------------------------------------------------------------------------
 
 void setup() {
@@ -189,10 +224,20 @@ void setup() {
 
   // this will be called for each packet received
   artnet.setArtDmxCallback(onDmxFrame);
+
+  //OSC
+  //Udp.begin(localPort);
 }
 
 void loop() {
   ArduinoOTA.handle();
   //blink(500,500);                                                             // for LEDs testing
   artnet.read();
+
+  //send OSC report
+  if (millis() - previousMillisGlobal >= reportInterval){
+    sendReport;
+    previousMillisGlobal = millis();
+  }
+
 }
