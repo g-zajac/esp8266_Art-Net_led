@@ -1,6 +1,6 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.81
+#define CODE_VERSION 1.83
 #define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
 #define LED_OUT  13
@@ -238,6 +238,9 @@ void loop() {
   if (millis() - previousMillisGlobal >= reportInterval){
     sendReport;
     previousMillisGlobal = millis();
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.println("OSC report sent");
+    #endif
   }
 
 }
