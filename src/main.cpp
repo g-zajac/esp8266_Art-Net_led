@@ -1,7 +1,7 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
 #define CODE_VERSION 1.5
-#define HOSTNAME "costume"                                                      //TODO change to assign dynamicly based on ip
+#define HOSTNAME "costume"                                                      
 
 #define LED_OUT    13
 
@@ -48,7 +48,7 @@ void setup() {
 
   #ifdef DEBUG_HARDWARE_SERIAL
     Serial.begin(SERIAL_SPEED);
-    Serial.println(" ");  Serial.println(" ");  Serial.println(" ");            //Some compilation and other info 
+    Serial.println(" ");  Serial.println(" ");  Serial.println(" ");            //Some compilation and other info
     Serial.println("---------------------------------------");
     Serial.println("Compiled: " __DATE__ ", " __TIME__ ", " __VERSION__);
     Serial.print("Code version: "); Serial.println(CODE_VERSION);
@@ -111,7 +111,15 @@ void setup() {
   #endif
 
 // --------------------------- OTA ---------------------------------------------
+  char buf[30]; buf[0] = {0};
+  snprintf(buf, 30, "%s%i", HOSTNAME, unit_ID);
+  ArduinoOTA.setHostname(buf);
+  #ifdef DEBUG_HARDWARE_SERIAL
+    Serial.print("Hostname: "); Serial.println(buf);
+  #endif
+
   ArduinoOTA.setHostname(HOSTNAME);
+
   #ifdef DEBUG_HARDWARE_SERIAL
     Serial.print("Hostname: "); Serial.println(HOSTNAME);
   #endif
