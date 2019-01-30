@@ -1,8 +1,8 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.6
+#define CODE_VERSION 1.72
 #define HOSTNAME "costume"
-
+#define UNIVERSE 0                                                              //Max MSP test patch 0, desk 1
 #define LED_OUT    13
 
 #include <Arduino.h>
@@ -26,6 +26,11 @@ extern "C"{
 IPAddress deviceip;
 int unit_ID;
 
+#include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
+ArtnetWifi artnet;
+//------------------- ArtNet -----------------------------
+
+
 //------------------------ functions -------------------------------------------
 void blink(int tOn, int tOff){                                                  // for testing led
 static int timer=tOn;
@@ -40,6 +45,31 @@ digitalWrite(LED_OUT, !digitalRead(LED_OUT));
      previousMillis = millis();
   }
 }
+
+void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data){
+
+  if (universe == UNIVERSE) {
+
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.print("DMX: Univ: ");
+      Serial.print(universe, DEC);
+      Serial.print(", Seq: ");
+      Serial.print(sequence, DEC);
+      Serial.print(", Data (");
+      Serial.print(length, DEC);
+      Serial.println("): ");
+    #endif
+
+    int value = data[deviceip[3]-1];                                            //artnet address = unit IP last octet
+    if (value == 0) analogWrite(LED_OUT, value);
+    if (value > 0 and value <=255) analogWrite(LED_OUT, value);
+    if (value > 255){
+      analogWrite(LED_OUT, 0);    //disable PWM
+      digitalWrite(LED_OUT, HIGH);
+      }
+    }
+}
+
 //------------------------------------------------------------------------------
 
 void setup() {
@@ -131,9 +161,11 @@ void setup() {
     #endif
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    digitalWrite(LED_OUT, HIGH);
     #ifdef DEBUG_HARDWARE_SERIAL
       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     #endif
+    digitalWrite(LED_OUT, LOW);
   });
   ArduinoOTA.onError([](ota_error_t error) {
     #ifdef DEBUG_HARDWARE_SERIAL
@@ -146,9 +178,16 @@ void setup() {
     #endif
   });
   ArduinoOTA.begin();
+
+  //initialize artnet
+  artnet.begin();
+
+  // this will be called for each packet received
+  artnet.setArtDmxCallback(onDmxFrame);
 }
 
 void loop() {
   ArduinoOTA.handle();
-  blink(500,500);                                                               // for testing led
+  //blink(500,500);
+  artnet.read();                                                             // for testing led
 }
