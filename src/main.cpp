@@ -1,18 +1,22 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.73
+#define CODE_VERSION 1.85
 #define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
-#define LED_OUT    13
+#define LED_OUT  13
+#define ADCINPUT A0                                                             //battery monitoring level - connected via resistors devider
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include "credentials.h"                                                        //ignored by git to keep the network details in separate file private
-/* credentials.h example:
+/* credentials.h template:
 const char* ssid = "network_name";
 const char* password = "password";
 IPAddress gateway(10,0,100,1);
 IPAddress subnet(255,255,255,0);
+const IPAddress remoteIP(xxx,xxx,xxx,xxx);        // remote IP of your computer
+const unsigned int destPort = xxxx;          // remote port to receive OSC
+const unsigned int localPort = xxxx;        // local port to listen for OSC packets (actually not used for sending)
  */
 
  #include <ArduinoOTA.h>
@@ -25,10 +29,20 @@ extern "C"{
 }
 #include "devices.h"                                                            //list of MAC addresses of devices for self assigning static IPs
 IPAddress deviceip;
+int unitID;
+char unitName[16];
 
 //----------------------------------------- ArtNet -----------------------------
 #include <ArtnetWifi.h>   //cloned from https://github.com/rstephan/ArtnetWifi.git
 ArtnetWifi artnet;
+
+//----------------------------------------- OSC --------------------------------
+#include <OSCBundle.h>
+#include <OSCData.h>
+WiFiUDP Udp;
+OSCErrorCode error;
+unsigned long runningTime, previousMillisGlobal;
+int reportInterval = 3000;                                                      // send OSC report every 3 sec
 
 //------------------------ functions -------------------------------------------
 void blink(int tOn, int tOff){                                                  // for LEDs testing
@@ -63,7 +77,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       Serial.println("");
     #endif
 
-    int value = data[deviceip[3]-1];                                            //artnet address = unit IP last octet, starting from 0 -> -1
+    int value = data[unitID-1];                                            //artnet address = unit IP last octet, starting from 0 -> -1
     if (value == 0) analogWrite(LED_OUT, value);
     if (value > 0 and value <=255) analogWrite(LED_OUT, value);
     if (value > 255){
@@ -71,6 +85,30 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       digitalWrite(LED_OUT, HIGH);
       }
     }
+}
+
+void sendOSCmessage(char* name, float value){
+  char message_osc_header[20];
+  message_osc_header[0] = {0};
+  strcat(message_osc_header, unitName);
+  strcat(message_osc_header, name);
+  OSCMessage message(message_osc_header);
+  message.add(value);
+  Udp.beginPacket(remoteIP, destPort);
+  message.send(Udp);
+  Udp.endPacket();
+  message.empty();
+}
+
+void sendReport(){
+  sendOSCmessage("/ver", CODE_VERSION);                                       
+  sendOSCmessage("/rssi", WiFi.RSSI());
+  sendOSCmessage("/channel", WiFi.channel());
+  sendOSCmessage("/time", (millis()/1000));               //running time in secs
+  float v = analogRead(ADCINPUT * 10.65); // ((30000 + 3000)/3000)calibration based on voltage divider 30k - 3k, calibrated on workbench
+  float voltage = v / 1024;
+  Serial.print("Voltage");  Serial.println(voltage);
+  sendOSCmessage("/voltage", voltage);                                          //TODO test AD input
 }
 
 //------------------------------------------------------------------------------
@@ -121,10 +159,12 @@ void setup() {
     }
   }
   deviceip = IPAddress(gateway);
-  deviceip[3] = device->id;
+  unitID = device->id;
   #ifdef DEBUG_HARDWARE_SERIAL
-    Serial.print("found in devices list ID: "); Serial.println(deviceip[3]);
+    Serial.print("found in devices list ID: "); Serial.println(unitID);
   #endif
+
+  deviceip[3] = unitID;
 
   WiFi.mode(WIFI_STA);
   WiFi.config(deviceip, gateway, subnet);
@@ -143,12 +183,14 @@ void setup() {
     Serial.print("assigned IP address: "); Serial.println(WiFi.localIP());
   #endif
 
+  // build unit name
+  unitName[0] = {0};
+  snprintf(unitName, 30, "%s%i", HOSTNAME, unitID);
+
 // --------------------------- OTA ---------------------------------------------
-  char buf[30]; buf[0] = {0};
-  snprintf(buf, 30, "%s%i", HOSTNAME, deviceip[3]);
-  ArduinoOTA.setHostname(buf);
+  ArduinoOTA.setHostname(unitName);
   #ifdef DEBUG_HARDWARE_SERIAL
-    Serial.print("Hostname: "); Serial.println(buf);
+    Serial.print("Hostname: "); Serial.println(unitName);
   #endif
 
   ArduinoOTA.setHostname(HOSTNAME);
@@ -189,10 +231,23 @@ void setup() {
 
   // this will be called for each packet received
   artnet.setArtDmxCallback(onDmxFrame);
+
+  //OSC
+  //Udp.begin(localPort);
 }
 
 void loop() {
   ArduinoOTA.handle();
   //blink(500,500);                                                             // for LEDs testing
   artnet.read();
+
+  //send OSC report
+  if (millis() - previousMillisGlobal >= reportInterval){
+    #ifdef DEBUG_HARDWARE_SERIAL
+      Serial.println("sending OSC report");
+    #endif
+    sendReport();
+    previousMillisGlobal = millis();
+  }
+
 }
