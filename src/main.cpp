@@ -1,6 +1,6 @@
 #define DEBUG_HARDWARE_SERIAL                                                   // if commented, not defined, serial debug info will be off
 #define SERIAL_SPEED 115200
-#define CODE_VERSION 1.85
+#define CODE_VERSION 1.9
 #define HOSTNAME "costume"                                                      //costumeXXX - XXX last octet of IP address
 #define UNIVERSE 0                                                              //set for 0 with Max MSP, 1 for lighting desk
 #define LED_OUT  13
@@ -101,13 +101,12 @@ void sendOSCmessage(char* name, float value){
 }
 
 void sendReport(){
-  sendOSCmessage("/ver", CODE_VERSION);                                       
+  sendOSCmessage("/ver", CODE_VERSION);
   sendOSCmessage("/rssi", WiFi.RSSI());
   sendOSCmessage("/channel", WiFi.channel());
   sendOSCmessage("/time", (millis()/1000));               //running time in secs
   float v = analogRead(ADCINPUT * 10.65); // ((30000 + 3000)/3000)calibration based on voltage divider 30k - 3k, calibrated on workbench
   float voltage = v / 1024;
-  Serial.print("Voltage");  Serial.println(voltage);
   sendOSCmessage("/voltage", voltage);                                          //TODO test AD input
 }
 
@@ -232,7 +231,7 @@ void setup() {
   // this will be called for each packet received
   artnet.setArtDmxCallback(onDmxFrame);
 
-  //OSC
+  //OSC receiving, might be use for remote triggering report instead of fixed time slots
   //Udp.begin(localPort);
 }
 
